@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+        <link rel="stylesheet" href="style.css" />
+        <title>Home AI</title>
+        <style></style>
+    </head>
+    <body>
+        <header>
+            <button id="new-chat-btn">New chat</button>
+            <button id="logout-btn" hx-post="/logout">Logout</button>
+            <div class="dropdown-model" hx-get="/htmx/model">
+            </div>
+        </header>
+        <main class="chat-container">
+            <div
+                class="chat-list-container"
+                hx-trigger="load"
+                hx-swap="innerHTML"
+                hx-get="/htmx/chat-list"
+            ></div>
+            <div class="chat-container">
+                <div class="chat-history"></div>
+                <form class="message-form" method="">
+                    <input
+                        type="text"
+                        name="message"
+                        placeholder="Type a message"
+                    ></input>
+                    <button type="submit">Send</button>
+                </form>
+            </div>
+        </main>
+    </body>
+</html>

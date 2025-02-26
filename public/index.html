@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="style.css" />
+        <title>Home AI</title>
+        <style>
+            .container {
+                position: absolute;
+                display: flex;
+                flex-direction: column;
+                left: 50%;
+                top: 50%;
+                width: 300px;
+                max-width: 100%;
+                transform: translate(-50%, -50%);
+                gap: 10px;
+            }
+            .register-login-form {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .register-login-form button,
+            .register-login-form input {
+                width: 100%;
+                box-sizing: border-box;
+                border: none;
+                margin: 0;
+                padding: 4px 8px;
+                margin: 0;
+            }
+            .register-login-btn-container {
+                display: flex;
+                flex-direction: row;
+                width: 100%;
+                gap: 8px;
+            }
+            .register-login-btn-container button {
+                width: 100%;
+                border: none;
+            }
+            .register-login-btn-container button.active {
+                background-color: #4caf50;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="register-login-btn-container">
+                <button class="login" id="login-btn">Login</button>
+                <button class="register" id="register-btn">Register</button>
+            </div>
+            <form class="register-login-form" method="post">
+                <input type="text" name="username" placeholder="Username" />
+                <input type="password" name="password" placeholder="Password" />
+                <button class="submit" id="submit-btn" disabled>Submit</button>
+            </form>
+        </div>
+        <script>
+            const registerBtn = document.getElementById("register-btn");
+            const submitBtn = document.getElementById("submit-btn");
+            const loginBtn = document.getElementById("login-btn");
+
+            registerBtn.addEventListener("click", () => {
+                submitBtn.disabled = false;
+                if (!registerBtn.classList.contains("active"))
+                    registerBtn.classList.add("active");
+                if (loginBtn.classList.contains("active"))
+                    loginBtn.classList.remove("active");
+                document.querySelector("form.register-login-form").action =
+                    "/register";
+            });
+
+            loginBtn.addEventListener("click", () => {
+                submitBtn.disabled = false;
+                if (!loginBtn.classList.contains("active"))
+                    loginBtn.classList.add("active");
+                if (registerBtn.classList.contains("active"))
+                    registerBtn.classList.remove("active");
+                document.querySelector("form.register-login-form").action =
+                    "/login";
+            });
+
+            document
+                .getElementById("submit-btn")
+                .addEventListener("click", () => {
+                    const form = document.querySelector(
+                        "form.register-login-form",
+                    );
+                    const formData = new FormData(form);
+                    const data = {};
+                    for (const [key, value] of formData.entries()) {
+                        data[key] = value;
+                    }
+                    console.log(formData);
+                    console.log(data);
+                });
+        </script>
+    </body>
+</html>
