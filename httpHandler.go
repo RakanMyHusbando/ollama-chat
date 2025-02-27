@@ -13,7 +13,20 @@ func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/login", s.loginHandler)
 	http.HandleFunc("/logout", s.logoutHandler)
 	http.HandleFunc("/htmx/chat-list", s.chatHandler)
-	http.Handle("/", http.FileServer(http.Dir("public")))
+	http.HandleFunc("/", s.indexHandler)
+}
+
+func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
+	_, authErr := s.getUserBySessionToken(r)
+	if  authErr == nil {
+		http.Redirect(w, r, "/chat", http.StatusFound)
+		return
+	}
+	tmpl, err := template.ParseFiles("html-content/login.html")
+	if err != nil {
+		w.Write([]byte(err.Error()))
+	}
+	if err := tmpl.Execute(w, authErr)
 }
 
 func (s *SQLiteStorage) registerHandler(w http.ResponseWriter, r *http.Request) {
