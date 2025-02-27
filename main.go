@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -56,8 +57,7 @@ func hashPassword(password string) (string, error) {
 }
 
 func checkPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
 func (s *SQLiteStorage) getUserBySessionToken(r *http.Request) (*User, error) {
@@ -66,4 +66,16 @@ func (s *SQLiteStorage) getUserBySessionToken(r *http.Request) (*User, error) {
 		return nil, fmt.Errorf("No session token found")
 	}
 	return s.selectUserBySessionToken(stCoockie.Value)
+}
+
+func loadLoginPage(w http.ResponseWriter, errMsg string) {
+	tmpl, err := template.ParseFiles("html-content/login.html")
+	if err != nil {
+		http.Error(w, "Failed to load this page", http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.Execute(w, errMsg); err != nil {
+		http.Error(w, "Failed to load this page", http.StatusInternalServerError)
+		return
+	}
 }

@@ -9,41 +9,39 @@ import (
 )
 
 func (s *SQLiteStorage) routes() {
+	http.HandleFunc("/", s.indexHandler)
+
 	http.HandleFunc("/register", s.registerHandler)
 	http.HandleFunc("/login", s.loginHandler)
 	http.HandleFunc("/logout", s.logoutHandler)
-	http.HandleFunc("/htmx/chat-list", s.chatHandler)
-	http.HandleFunc("/", s.indexHandler)
+	http.HandleFunc("/chat", s.chatHandler)
+
+	http.HandleFunc("/htmx/chat-list", s.chatListHandler)
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	_, authErr := s.getUserBySessionToken(r)
-	if  authErr == nil {
-		http.Redirect(w, r, "/chat", http.StatusFound)
+	if _, err := s.getUserBySessionToken(r); err != nil {
+		loadLoginPage(w, "")
 		return
 	}
-	tmpl, err := template.ParseFiles("html-content/login.html")
-	if err != nil {
-		w.Write([]byte(err.Error()))
-	}
-	if err := tmpl.Execute(w, authErr)
+	http.Redirect(w, r, "/chat", http.StatusFound)
 }
 
 func (s *SQLiteStorage) registerHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("username")
 	password := r.FormValue("password")
 	if len(name) < 8 || len(password) < 8 {
-		http.Error(w, "Username and password must be at least 8 characters long", http.StatusBadRequest)
+		loadLoginPage(w, "Username and password must be at least 8 characters long")
 		return
 	}
 	passHash, err := hashPassword(password)
 	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		loadLoginPage(w, "Failed to hash password")
 		return
 	}
 	user := newUser(name, passHash, "")
 	if err := s.insertUser(user); err != nil {
-		http.Error(w, "Failed to register user", http.StatusInternalServerError)
+		loadLoginPage(w, "User already exists")
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/login?username=%s&password=%s", name, password), http.StatusFound)
@@ -54,12 +52,12 @@ func (s *SQLiteStorage) loginHandler(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 	user, err := s.selectUserByName(name)
 	if err != nil || !checkPasswordHash(password, user.Password) {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		loadLoginPage(w, "Invalid credentials")
 		return
 	}
 	user.SessionToken = createToken(32)
-	if err := s.updateUserSessionTokenByName(user.Name, user.SessionToken); err != nil {
-		http.Error(w, "Failed to login", http.StatusInternalServerError)
+	if err := s.updateUserSessionTokenByName(user.SessionToken, user.Name); err != nil {
+		loadLoginPage(w, "Failed to update session token")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -85,16 +83,36 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(-time.Hour),
 		HttpOnly: true,
 	})
-	if err := s.updateUserSessionTokenByName(user.Name, ""); err != nil {
+	if err := s.updateUserSessionTokenByName("", user.Name); err != nil {
 		http.Error(w, "Failed to logout", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-/* ----------------------------------------------- Chat ----------------------------------------------- */
-
 func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
+	user, err := s.getUserBySessionToken(r)
+	if err != nil {
+		fmt.Println(user, "\n", err)
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	chats, err := s.selectChatsByUserID(user.Id)
+	if err != nil {
+		http.Error(w, "Failed to get chats", http.StatusInternalServerError)
+		return
+	}
+	tmpl, err := template.ParseFiles("html-content/chat.html")
+	if err != nil {
+		http.Error(w, "Failed to load this page", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, chats)
+}
+
+/* ----------------------------------------------- HTMX ----------------------------------------------- */
+
+func (s *SQLiteStorage) chatListHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := s.getUserBySessionToken(r)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
@@ -110,8 +128,5 @@ func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
 		return
 	}
-	if err := tmpl.Execute(w, chats); err != nil {
-		http.Error(w, "Failed to execute template", http.StatusInternalServerError)
-		return
-	}
+	tmpl.Execute(w, chats)
 }

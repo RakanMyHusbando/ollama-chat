@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"time"
 )
@@ -17,7 +16,6 @@ func newSQLiteStorage() (*SQLiteStorage, error) {
 		return nil, err
 	}
 	for _, query := range createTableQuerys {
-		fmt.Println(query)
 		if _, err = db.Exec(query); err != nil {
 			return nil, err
 		}
