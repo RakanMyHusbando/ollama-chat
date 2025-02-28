@@ -9,7 +9,6 @@ var createTableQuerys = []string{
 	`CREATE TABLE IF NOT EXISTS Chat (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
-		name TEXT UNIQUE,
 		create_at TEXT NOT NULL,
 		FOREIGN KEY(user_id) REFERENCES User(id)
 	)`,

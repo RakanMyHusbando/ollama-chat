@@ -18,6 +18,7 @@ var (
 	host      string
 	port      string
 	ollamaUrl string
+	client    = &http.Client{}
 )
 
 func main() {
