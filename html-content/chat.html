@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta http-equiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="style.css" />
+        <script src="/js/chat.js" defer></script>
         <title>Home AI</title>
         <style>
             body {
@@ -25,23 +25,22 @@
                 right: 0;
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gri
                 height: 24px;
                 gap: 8px;
-                background-color: #2C323D;
+                background-color: #2c323d;
                 padding: 8px;
                 margin: 0;
             }
             .new-model-input-container {
                 position: absolute;
                 top: 24px;
-                background-color: #2C323D;
+                background-color: #2c323d;
                 left: 0;
                 right: 0;
             }
             .headline-elem {
                 border: none;
-                background-color: #545A68;
+                background-color: #545a68;
                 color: white;
                 padding: 4px 8px;
                 border-radius: 4px;
@@ -64,9 +63,10 @@
                 display: flex;
                 gap: 4px;
             }
-            main .message-form button, main .message-form input {
+            main .message-form button,
+            main .message-form input {
                 border: none;
-                background-color: #545A68;
+                background-color: #545a68;
                 color: white;
                 padding: 4px 8px;
                 border-radius: 4px;
@@ -89,19 +89,21 @@
                 width: 100%;
             }
             .message .text {
-                background-color: #545A68;
+                background-color: #545a68;
                 color: white;
                 padding: 8px;
                 border-radius: 4px;
                 margin: 4px 0;
                 max-width: 80%;
             }
-            .message.right , .message.user {
-                display: flex ;
+            .message.right,
+            .message.user {
+                display: flex;
                 justify-content: flex-end;
             }
-            .message.left, .message.assistant {
-                display: flex ;
+            .message.left,
+            .message.assistant {
+                display: flex;
                 justify-content: flex-start;
             }
             a.headline-elem {
@@ -131,93 +133,14 @@
         <div class="new-model-input-container"></div>
         <main>
             <div class="chat-history"></div>
-            <form class="message-form">
+            <div class="message-form">
                 <input
                     type="text"
                     name="message"
                     placeholder="Type a message"
                 />
                 <button type="submit">Send</button>
-            </form>
+            </div>
         </main>
-        <script>
-            const chatHistory = document.querySelector(".chat-history");
-            const dropdownModels = document.querySelector(
-                ".headline-elem.dropdown.dropdown-model",
-            );
-            const dropdownChats = document.querySelector(
-                ".headline-elem.dropdown.dropdown-chats",
-            );
-            let chatId = 0;
-            let user = ""
-
-            const loadHtml = async (elem, container) => {
-                const response = await fetch("/html/" + elem);
-                const html = await response.text();
-                container.innerHTML = html;
-            };
-
-            const newMessageElem = (role, message) => {
-                const messageElem = document.createElement("div");
-                const textElem = document.createElement("div");
-                messageElem.classList.add("message");
-                messageElem.classList.add(role);
-                textElem.classList.add("text");
-                textElem.innerText = message.content;
-                messageElem.appendChild(textElem);
-                return messageElem;
-            };
-
-            const loadChat = async (chatId) => {
-                const response = await fetch(
-                    "/html/chat-history?chat_id" + chatId,
-                );
-                const chat = await response.json();
-                chatHistory.innerHTML = "";
-                chat.messages.sort((a, b) => a.id - b.id);
-                chat.messages.forEach((message) => {
-                    chatHistory.appendChild(
-                        newMessageElem(message.role == user ? , message),
-                    );
-                });
-            };
-
-            dropdownChats.addEventListener("change", async (e) => {
-                chat.chatId = e.target.value;
-                loadChat(chat.chatId);
-            });
-
-            document
-                .querySelector(".message-form")
-                .addEventListener("submit", async (e) => {
-                    e.preventDefault();
-                    const message = e.target.message.value;
-                    const response = await fetch("/message", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            model: dropdownModels.value,
-                            chat_id: chatId,
-                            message,
-                        }),
-                    });
-                    const data = await response.json();
-                    chatHistory.appendChild(newMessageElem("right", data));
-                    e.target.message.value = "";
-                });
-
-            window.onload = async () => {
-                loadHtml("models", dropdownModels);
-                loadHtml("chats", dropdownChats);
-            };
-
-            fetch("/user")
-                .then((response) => response.json())
-                .then((data) => {
-                    user = data.name;
-                });
-        </script>
     </body>
 </html>

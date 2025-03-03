@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,23 +10,20 @@ import (
 
 func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/", s.indexHandler)
+	http.HandleFunc("/chat", s.authorize(s.chatHandler))
 
 	http.HandleFunc("/register", s.registerHandler)
 	http.HandleFunc("/login", s.loginHandler)
-	http.HandleFunc("/logout", s.logoutHandler)
-	http.HandleFunc("/chat", s.chatHandler)
-	http.HandleFunc("/message", s.messageHandler)
+	http.HandleFunc("/logout", s.authorize(s.logoutHandler))
 
-	http.HandleFunc("/json/user", s.userHandler)
+	http.HandleFunc("/api/chat", s.authorize(s.apiChatHandler))
 
-	http.HandleFunc("/html/chat-history", s.chatHistoryHandler)
-	http.HandleFunc("/html/chat", s.chatsHandler)
-	http.HandleFunc("/html/models", s.modelsHandler)
+	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.getUserBySessionToken(r); err != nil {
-		loadLoginPage(w, "")
+		loadLoginPage(w, err.Error())
 		return
 	}
 	http.Redirect(w, r, "/chat", http.StatusFound)
@@ -79,11 +73,7 @@ func (s *SQLiteStorage) loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
-	user, err := s.getUserBySessionToken(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
+	user, _ := s.getUserBySessionToken(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    "",
@@ -91,160 +81,68 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 	if err := s.updateUserSessionTokenByName("", user.Name); err != nil {
-		http.Error(w, "Failed to logout", http.StatusInternalServerError)
+		logHttpErr(w, "Failed to logout", http.StatusInternalServerError, err)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func (s *SQLiteStorage) messageHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var clientMessage *ClientMessage
-	if err := json.NewDecoder(r.Body).Decode(&clientMessage); err != nil {
-		http.Error(w, "Failed to decode message", http.StatusInternalServerError)
-		return
-	}
-	user, err := s.getUserBySessionToken(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if clientMessage.ChatId == 0 {
-		chat := newChat(user.Id, time.Now().Format(time.Layout))
-		if err := s.insertChat(chat); err != nil {
-			http.Error(w, "Failed to insert chat", http.StatusInternalServerError)
-			return
-		}
-		clientMessage.ChatId = chat.Id
-	}
-	if err := s.insertMessage(newMessage(0, clientMessage.ChatId, clientMessage.Message, "user", time.Now().Format(time.Layout))); err != nil {
-		http.Error(w, "Failed to insert message", http.StatusInternalServerError)
-		return
-	}
-	var ollamaChat = newReqOllamaChat(clientMessage.Model, [][2]string{{"user", clientMessage.Message}}, false)
-	b, err := json.Marshal(ollamaChat)
-	if err != nil {
-		http.Error(w, "Failed to marshal chat", http.StatusInternalServerError)
-		return
-	}
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/chat", ollamaUrl), bytes.NewBuffer(b))
-	if err != nil {
-		http.Error(w, "Failed to create request", http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, "Failed to send request", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read response", http.StatusInternalServerError)
-		return
-	}
-	w.Write(body)
-}
-
 func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
-	user, err := s.getUserBySessionToken(r)
-	if err != nil || user == nil {
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
-	}
 	http.ServeFile(w, r, "html-content/chat.html")
 }
 
-/* --------------------------------- JSON --------------------------------- */
+/* --------------------------------- API --------------------------------- */
 
-func (s *SQLiteStorage) userHandler(w http.ResponseWriter, r *http.Request) {
-	user, err := s.getUserBySessionToken(r)
+func (s *SQLiteStorage) apiChatHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.getChatHandler(w, r)
+	case http.MethodPost:
+		s.postChatHandler(w, r)
+	}
+}
+
+func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
+	qMsg := r.URL.Query().Get("msg")
+	qChatId := r.URL.Query().Get("chatId")
+	_, err := s.getUserBySessionToken(r)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
+		logHttpErr(w, "User not found", http.StatusNotFound, err)
+		return
+	}
+	chats := []*Chat{}
+	if chatId, err := strconv.Atoi(qChatId); qChatId != "" && err == nil {
+		if chat, err := s.selectChatByID(chatId); err == nil {
+			chats = append(chats, chat)
+		}
+	}
+	if qMsg == "true" {
+		for _, chat := range chats {
+			chat.Messages, err = s.selectMessagesByChatID(chat.Id)
+			if err != nil {
+				logHttpErr(w, "Failed to get messages", http.StatusInternalServerError, err)
+				return
+			}
+		}
+	}
+	b, err := json.Marshal(chats)
+	if err != nil {
+		logHttpErr(w, "Failed to marshal chats", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(user); err != nil {
-		http.Error(w, "Failed to encode user", http.StatusInternalServerError)
-	}
+	w.Write(b)
 }
 
-/* --------------------------------- HTML --------------------------------- */
-
-func (s *SQLiteStorage) chatHistoryHandler(w http.ResponseWriter, r *http.Request) {
-	chatId, err := strconv.Atoi(r.URL.Query().Get("chat_id"))
-	if err != nil {
-		http.Error(w, "Chat ID not found", http.StatusBadRequest)
+func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) {
+	var chat *Chat
+	if err := json.NewDecoder(r.Body).Decode(chat); err != nil {
+		logHttpErr(w, "Failed to decode chat", http.StatusBadRequest, err)
 		return
 	}
-	chat, err := s.selectChatByID(chatId)
-	if err != nil {
-		http.Error(w, "Chat not found", http.StatusNotFound)
+	if err := s.insertChat(chat); err != nil {
+		logHttpErr(w, "Failed to insert chat", http.StatusInternalServerError, err)
 		return
 	}
-	user, err := s.getUserBySessionToken(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if chat.UserId != user.Id {
-		http.Error(w, "User not allowed", http.StatusForbidden)
-		return
-	}
-	messages, err := s.selectMessagesByChatID(chatId)
-	if err != nil {
-		http.Error(w, "Failed to get messages", http.StatusInternalServerError)
-		return
-	}
-	tmpl, err := template.ParseFiles("html-content/chat-history.html")
-	if err != nil {
-		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
-		return
-	}
-	tmpl.Execute(w, messages)
-}
-
-func (s *SQLiteStorage) chatsHandler(w http.ResponseWriter, r *http.Request) {
-	chatTemplate := `<option class="default" value="" selected>Select a chat</option>`
-	user, err := s.getUserBySessionToken(r)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusNotFound)
-	}
-	chats, err := s.selectChatsByUserID(user.Id)
-	if err != nil {
-		w.Write([]byte(chatTemplate))
-		http.Error(w, "Failed to get chats", http.StatusInternalServerError)
-	}
-	chatTemplate += `{{ range . }}<option  value="{{ .Id }}">{{ .Name }}</option>{{ end }}`
-	tmpl, err := template.New("chat").Parse(chatTemplate)
-	if err != nil {
-		w.Write([]byte(chatTemplate))
-		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
-		return
-	}
-	tmpl.Execute(w, chats)
-}
-
-func (s *SQLiteStorage) modelsHandler(w http.ResponseWriter, r *http.Request) {
-	resp, err := http.Get(ollamaUrl + "/api/tags")
-	if err != nil {
-		http.Error(w, "Failed to get models", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-	var models *ResOllamaModels
-	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
-		http.Error(w, "Failed to decode models", http.StatusInternalServerError)
-	}
-	tmpl, err := template.ParseFiles("html-content/models.html")
-	if err != nil {
-		http.Error(w, "Failed to parse template", http.StatusInternalServerError)
-		return
-	}
-
-	tmpl.Execute(w, models.Models)
+	w.WriteHeader(http.StatusCreated)
 }

@@ -40,9 +40,10 @@ func newUser(name, password, sessionToken string) *User {
 }
 
 type Chat struct {
-	Id       int       `json:"id"`
-	UserId   int       `json:"user_id"`
-	CreateAt time.Time `json:"create_at"`
+	Id       int        `json:"id"`
+	UserId   int        `json:"user_id"`
+	CreateAt time.Time  `json:"create_at"`
+	Messages []*Message `json:"messages"`
 }
 
 // newChat creates a new chat without an ID.
@@ -55,6 +56,20 @@ func newChat(userId int, timeStr string) *Chat {
 	return &Chat{
 		UserId:   userId,
 		CreateAt: t,
+	}
+}
+
+func newChatMessages(id, userId int, timeStr string, messages []*Message) *Chat {
+	t, err := time.Parse(time.Layout, timeStr)
+	if err != nil {
+		log.Println("Failed to parse time: ", err)
+	}
+	t = time.Time{}
+	return &Chat{
+		Id:       id,
+		UserId:   userId,
+		CreateAt: t,
+		Messages: messages,
 	}
 }
 
@@ -129,10 +144,4 @@ func newReqOllamaChat(model string, messages [][2]string, stream bool) *ReqOllam
 		Messages: ollamaMessages,
 		Stream:   stream,
 	}
-}
-
-type ClientMessage struct {
-	Model   string `json:"model"`
-	ChatId  int    `json:"chat_id"`
-	Message string `json:"message"`
 }

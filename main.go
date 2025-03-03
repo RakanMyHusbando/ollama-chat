@@ -44,6 +44,29 @@ func main() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf("%s:%s", host, port), nil))
 }
 
+func logHttpErr(w http.ResponseWriter, msg string, code int, err error) {
+	if err != nil {
+		log.Printf("%s: %v", msg, err)
+	} else {
+		log.Println(msg)
+	}
+	http.Error(w, msg, code)
+}
+
+type authHandler func(http.ResponseWriter, *http.Request)
+
+func (s *SQLiteStorage) authorize(f authHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, err := s.getUserBySessionToken(r)
+		if err != nil || user == nil {
+			logHttpErr(w, "User not found", http.StatusNotFound, err)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		f(w, r)
+	}
+}
+
 func createToken(lenght int) string {
 	bytes := make([]byte, lenght)
 	if _, err := rand.Read(bytes); err != nil {
