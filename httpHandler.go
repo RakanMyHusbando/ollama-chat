@@ -30,8 +30,8 @@ func ollamaHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.getUserBySessionToken(r); err != nil {
-		loadLoginPage(w, err.Error())
+	if user, err := s.getUserBySessionToken(r); err != nil && user != nil {
+		loadLoginPage(w, "")
 		return
 	}
 	http.Redirect(w, r, "/chat", http.StatusFound)
@@ -96,7 +96,7 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "html-content/chat.html")
+	http.ServeFile(w, r, "html/chat.html")
 }
 
 /* --------------------------------- API --------------------------------- */
