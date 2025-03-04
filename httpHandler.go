@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,9 +17,16 @@ func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/login", s.loginHandler)
 	http.HandleFunc("/logout", s.authorize(s.logoutHandler))
 
+	http.HandleFunc("/ollama/", ollamaHandler)
+
 	http.HandleFunc("/api/chat", s.authorize(s.apiChatHandler))
 
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
+}
+
+func ollamaHandler(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = strings.Replace(r.URL.Path, "/ollama/", "/api/", 1)
+	proxy.ServeHTTP(w, r)
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {

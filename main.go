@@ -7,6 +7,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -18,6 +20,7 @@ var (
 	host      string
 	port      string
 	ollamaUrl string
+	proxy     *httputil.ReverseProxy
 	client    = &http.Client{}
 )
 
@@ -29,6 +32,12 @@ func main() {
 	if port == "" || ollamaUrl == "" {
 		log.Fatal("PORT and OLLAMA_URL must be set in .env file")
 	}
+
+	targetUrl, err := url.Parse(ollamaUrl)
+	if err != nil {
+		log.Fatal("Failed to parse ollama-url.")
+	}
+	proxy = httputil.NewSingleHostReverseProxy(targetUrl)
 
 	s, err := newSQLiteStorage()
 	if err != nil {
