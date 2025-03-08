@@ -1,16 +1,6 @@
-const ollamaUrl = () => "http://localhost:11434";
+const ollamaUrl = () => "http://192.168.178.97:11434";
 
-/** @param {number} length */
-const makeId = (length) => {
-    let result = "";
-    const characters =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < length; i++)
-        result += characters.charAt(
-            Math.floor(Math.random() * characters.length),
-        );
-    return result;
-};
+const makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
 
 class Ollama {
     /** @type {string} */
@@ -22,7 +12,7 @@ class Ollama {
     /** @param {string} baseUrl */
     constructor(baseUrl) {
         this.baseUrl = baseUrl;
-        this.#getModel(this.#url(["tags"]));
+        this.#getModel(this.#url("tags")).then(() => console.log(this.models));
     }
 
     /** @param {... string} apiPath */
@@ -40,19 +30,17 @@ class Ollama {
     /**
      * @param {string} model
      * @param {{role: string, content: string}[]} messages
-     * @returns {ReadableStreamDefaultReader}
+     * @returns {Promise<Response>}
      */
     chatStream = async (model, messages) => {
         try {
             const res = await fetch(this.#url("chat"), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model, messages }),
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
             if (!res.body) throw new Error("Readable stream not found.");
-
-            return response.body.getReader();
+            return res;
         } catch (error) {
             console.error(error);
         }
@@ -63,12 +51,10 @@ class Ollama {
             const res = await fetch(this.#url("generate"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ model, prompt }),
+                body: JSON.stringify({ model, prompt, stream: false }),
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
-            if (!res.body) throw new Error("Readable stream not found.");
-
-            return response.body.getReader();
+            return res.json();
         } catch (error) {
             console.error(error);
         }
@@ -77,18 +63,17 @@ class Ollama {
     /**
      * Pulls a stream of data from the server.
      * @param {string} model - The model to use for the stream.
-     * @returns {ReadableStreamDefaultReader} - The reader for the stream.
+     * @returns {Response} - The reader for the stream.
      */
     pullStream = async (model) => {
         try {
             const res = await fetch(this.#url(["pull"]), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model }),
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
             if (!res.body) throw new Error("Readable stream not found.");
-            return response.body.getReader();
+            return res;
         } catch (error) {
             console.error(error);
         }
@@ -198,6 +183,30 @@ class Chat {
         const msg = new Message(this.content.id, content, role, createdAt);
         this.content.messages.push(msg);
         return msg;
+    };
+
+    /**
+     * @param {Message} message
+     * @param {Response} response
+     */
+    addResStreamMessage = async (message, response) => {
+        const badRes = ["", "<think>", "</think>"];
+        const reader = response.body.getReader();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    this.content.messages.push(message);
+                    return;
+                }
+                const str = new TextDecoder().decode(value);
+                const res = JSON.parse(str);
+                if (!badRes.includes(res.message.content))
+                    message.addText(res.message.content);
+            }
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     /** @returns {Object} The JSON representation of the chat object.*/

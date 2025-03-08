@@ -11,7 +11,7 @@ const messageButton = document.querySelector(".message-form button");
 import { Ollama, Api, Chat, Message, makeId, ollamaUrl } from "./script.js";
 
 const newChat = (api, userId) => {
-    const c = new Chat(makeId(10), userId, new Date().toISOString(), [], api);
+    const c = new Chat(makeId(), userId, new Date().toISOString(), [], api);
     localStorage.setItem("chat_id", c.content.id);
     return c;
 };
@@ -31,7 +31,7 @@ else
         chat = chats.length > 0 ? chats[0] : newChat(userId);
     });
 
-const runMessage = () => {
+const runMessage = async () => {
     if (messageInput.value.length > 0) {
         const msg = chat.addMessage(
             messageInput.value,
@@ -39,9 +39,22 @@ const runMessage = () => {
             new Date().toISOString(),
         );
         msg.createHTML();
-        console.log(msg.htmlElement);
         chatHistory.appendChild(msg.htmlElement);
         messageInput.value = "";
+        console.log(chat.formJson().messages);
+        const response = await ollama.chatStream(
+            ollama.models[0],
+            chat.formJson().messages,
+        );
+        const resMsg = new Message(
+            localStorage.getItem("chat_id"),
+            "",
+            "assistant",
+            new Date().toISOString(),
+        );
+        resMsg.createHTML();
+        chatHistory.appendChild(resMsg.htmlElement);
+        chat.addResStreamMessage(resMsg, response);
     }
 };
 messageButton.addEventListener("click", () => runMessage());
