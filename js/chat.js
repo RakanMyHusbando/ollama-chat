@@ -8,97 +8,42 @@ const dropdownChats = document.querySelector(
 const messageInput = document.querySelector(".message-form input");
 const messageButton = document.querySelector(".message-form button");
 
-const ollamaUrl = "http://localhost:11434";
+import { Ollama, Api, Chat, Message, makeId, ollamaUrl } from "./script.js";
 
-let chatId = 0;
-const context = [];
-
-const appendMessage = (role, message) => {
-    const messageElem = document.createElement("div");
-    const textElem = document.createElement("div");
-    messageElem.classList.add("message");
-    messageElem.classList.add(role);
-    textElem.classList.add("text");
-    textElem.innerText = message;
-    messageElem.appendChild(textElem);
-    chatHistory.appendChild(messageElem);
-    return messageElem;
+const newChat = (api, userId) => {
+    const c = new Chat(makeId(10), userId, new Date().toISOString(), [], api);
+    localStorage.setItem("chat_id", c.content.id);
+    return c;
 };
 
-const updateMessage = (elem, message) => {
-    elem.children[0].innerText += message;
-};
+const userId = parseInt(
+    document.cookie.match(new RegExp(`(^| )user_id=([^;]+)`)).pop(),
+);
 
-const appendModel = (model) => {
-    const optionElem = document.createElement("option");
-    optionElem.innerText = model;
-    optionElem.value = model;
-    dropdownModels.appendChild(optionElem);
-    return optionElem;
-};
+const ollama = new Ollama(ollamaUrl());
+const api = new Api();
+/** @type {Chat} */
+let chat;
 
-const chat = async (question, model) => {
-    let role = "user";
-    if (question === "") {
-        throw new Error("Question is empty");
-    }
-    context.push({ role, content: question });
-    const response = await fetch(ollamaUrl + "/api/chat", {
-        method: "POST",
-        body: JSON.stringify({
-            model: model,
-            messages: context,
-        }),
+if (!localStorage.getItem("chat_id")) chat = newChat(userId);
+else
+    await api.getChats(localStorage.getItem("chat_id"), true).then((chats) => {
+        chat = chats.length > 0 ? chats[0] : newChat(userId);
     });
-    if (!response.ok) {
-        throw new Error(
-            `HTTP error! Status: ${response.status} ${response.statusText}`,
+
+const runMessage = () => {
+    if (messageInput.value.length > 0) {
+        const msg = chat.addMessage(
+            messageInput.value,
+            "user",
+            new Date().toISOString(),
         );
-    }
-    if (!response.body) {
-        throw new Error("Readable stream not found in the response.");
-    }
-    let text = "";
-    const reader = response.body.getReader();
-    const assistMsgElem = appendMessage("assistant", text);
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-            context.push({ role: "assistant", content: text });
-            return;
-        }
-        const decodeStr = new TextDecoder().decode(value);
-        const res = JSON.parse(decodeStr);
-        text = text + res.message.content;
-        updateMessage(assistMsgElem, res.message.content);
+        msg.createHTML();
+        console.log(msg.htmlElement);
+        chatHistory.appendChild(msg.htmlElement);
+        messageInput.value = "";
     }
 };
-
-const tags = async () => {
-    const response = await fetch(ollamaUrl + "/api/tags");
-    if (!response.ok) {
-        throw new Error(
-            `HTTP error! Status: ${response.status} ${response.statusText}`,
-        );
-    }
-    const data = await response.json();
-    const models = [];
-    for (const model of data.models) {
-        models.push(model.name.split(":")[0]);
-    }
-    return models;
-};
-
-const runMessage = async () => {
-    const msg = messageInput.value;
-    messageInput.value = "";
-    appendMessage("user", msg);
-    console.log(dropdownModels.value);
-    await chat(msg, dropdownModels.value).catch((err) => console.error(err));
-};
-
-tags().then((res) => res.forEach((elem) => appendModel(elem)));
-
 messageButton.addEventListener("click", () => runMessage());
 messageInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runMessage();

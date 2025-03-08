@@ -7,8 +7,9 @@ var createTableQuerys = []string{
 		session_token TEXT UNIQUE
 	)`,
 	`CREATE TABLE IF NOT EXISTS Chat (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id TEXT PRIMARY KEY NOT NULL UNIQUE,
 		user_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
 		create_at TEXT NOT NULL,
 		FOREIGN KEY(user_id) REFERENCES User(id)
 	)`,

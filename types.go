@@ -2,12 +2,11 @@ package main
 
 import (
 	"database/sql"
-	"log"
-	"time"
 )
 
 type SQLiteStorage struct {
-	*sql.DB
+	user *User
+	db   *sql.DB
 }
 
 func newSQLiteStorage() (*SQLiteStorage, error) {
@@ -20,7 +19,7 @@ func newSQLiteStorage() (*SQLiteStorage, error) {
 			return nil, err
 		}
 	}
-	return &SQLiteStorage{db}, nil
+	return &SQLiteStorage{db: db}, nil
 }
 
 type User struct {
@@ -40,59 +39,38 @@ func newUser(name, password, sessionToken string) *User {
 }
 
 type Chat struct {
-	Id       int        `json:"id"`
-	UserId   int        `json:"user_id"`
-	CreateAt time.Time  `json:"create_at"`
-	Messages []*Message `json:"messages"`
+	Id        string     `json:"id"`
+	Name      string     `json:"name"`
+	UserId    int        `json:"user_id"`
+	CreatedAt string     `json:"created_at"`
+	Messages  []*Message `json:"messages"`
 }
 
-// newChat creates a new chat without an ID.
-func newChat(userId int, timeStr string) *Chat {
-	t, err := time.Parse(time.Layout, timeStr)
-	if err != nil {
-		log.Println("Failed to parse time: ", err)
-	}
-	t = time.Time{}
+func newChat(id string, name string, userId int, timeStr string, messages []*Message) *Chat {
 	return &Chat{
-		UserId:   userId,
-		CreateAt: t,
-	}
-}
-
-func newChatMessages(id, userId int, timeStr string, messages []*Message) *Chat {
-	t, err := time.Parse(time.Layout, timeStr)
-	if err != nil {
-		log.Println("Failed to parse time: ", err)
-	}
-	t = time.Time{}
-	return &Chat{
-		Id:       id,
-		UserId:   userId,
-		CreateAt: t,
-		Messages: messages,
+		Id:        id,
+		Name:      name,
+		UserId:    userId,
+		CreatedAt: timeStr,
+		Messages:  messages,
 	}
 }
 
 type Message struct {
-	Id       int       `json:"id"`
-	ChatId   int       `json:"chat_id"`
-	Message  string    `json:"message"`
-	Role     string    `json:"role"`
-	CreateAt time.Time `json:"create_at"`
+	Id        int    `json:"id"`
+	ChatId    string `json:"chat_id"`
+	Content   string `json:"content"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"created_at"`
 }
 
-func newMessage(Id, chatId int, message, role, timeStr string) *Message {
-	t, err := time.Parse(time.Layout, timeStr)
-	if err != nil {
-		log.Println("Failed to parse time: ", err)
-	}
-	t = time.Time{}
+func newMessage(id int, chatId, content, role, createdAt string) *Message {
 	return &Message{
-		Id:       Id,
-		ChatId:   chatId,
-		Message:  message,
-		Role:     role,
-		CreateAt: t,
+		Id:        id,
+		ChatId:    chatId,
+		Content:   content,
+		Role:      role,
+		CreatedAt: createdAt,
 	}
 }
 

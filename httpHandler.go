@@ -11,7 +11,7 @@ import (
 
 func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/", s.indexHandler)
-	http.HandleFunc("/chat", s.authorize(s.chatHandler))
+	http.HandleFunc("/chat", s.chatHandler)
 
 	http.HandleFunc("/register", s.registerHandler)
 	http.HandleFunc("/login", s.loginHandler)
@@ -20,6 +20,7 @@ func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/ollama/", ollamaHandler)
 
 	http.HandleFunc("/api/chat", s.authorize(s.apiChatHandler))
+	http.HandleFunc("/api/message", s.authorize(s.apiMessageHandler))
 
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
 }
@@ -29,8 +30,22 @@ func ollamaHandler(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
+func ollamaStreamHandler(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = strings.Replace(r.URL.Path, "/ollama/stream/", "/api/", 1)
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Length")
+		resp.Header.Del("Content-Encoding")
+		return nil
+	}
+	flusher := w.(http.Flusher)
+	w.Header().Set("Transfer-Encoding", "chunked")
+	proxy.ServeHTTP(w, r)
+	flusher.Flush()
+
+}
+
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	if user, err := s.getUserBySessionToken(r); err != nil && user != nil {
+	if user, err := s.getUserBySessionToken(r); err != nil || user == nil {
 		loadLoginPage(w, "")
 		return
 	}
@@ -77,18 +92,24 @@ func (s *SQLiteStorage) loginHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "user_id",
+		Value:    strconv.Itoa(user.Id),
+		Expires:  time.Now().Add(24 * time.Hour),
+		Path:     "/",
+		HttpOnly: false,
+	})
 	http.Redirect(w, r, "/chat", http.StatusFound)
 }
 
 func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
-	user, _ := s.getUserBySessionToken(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HttpOnly: true,
 	})
-	if err := s.updateUserSessionTokenByName("", user.Name); err != nil {
+	if err := s.updateUserSessionTokenByName("", s.user.Name); err != nil {
 		logHttpErr(w, "Failed to logout", http.StatusInternalServerError, err)
 		return
 	}
@@ -96,6 +117,10 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("Access-Control-Allow-Credentials", "true")
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	http.ServeFile(w, r, "html/chat.html")
 }
 
@@ -107,23 +132,21 @@ func (s *SQLiteStorage) apiChatHandler(w http.ResponseWriter, r *http.Request) {
 		s.getChatHandler(w, r)
 	case http.MethodPost:
 		s.postChatHandler(w, r)
+	default:
+		logHttpErr(w, "Method not allowed", http.StatusMethodNotAllowed, nil)
 	}
 }
 
 func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
 	qMsg := r.URL.Query().Get("msg")
-	qChatId := r.URL.Query().Get("chatId")
-	_, err := s.getUserBySessionToken(r)
-	if err != nil {
-		logHttpErr(w, "User not found", http.StatusNotFound, err)
-		return
-	}
+	qChatId := r.URL.Query().Get("id")
 	chats := []*Chat{}
-	if chatId, err := strconv.Atoi(qChatId); qChatId != "" && err == nil {
-		if chat, err := s.selectChatByID(chatId); err == nil {
+	if qChatId != "" {
+		if chat, err := s.selectChatById(qChatId); err == nil {
 			chats = append(chats, chat)
 		}
 	}
+	var err error
 	if qMsg == "true" {
 		for _, chat := range chats {
 			chat.Messages, err = s.selectMessagesByChatID(chat.Id)
@@ -150,6 +173,28 @@ func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	if err := s.insertChat(chat); err != nil {
 		logHttpErr(w, "Failed to insert chat", http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+func (s *SQLiteStorage) apiMessageHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		s.postMessageHandler(w, r)
+	default:
+		logHttpErr(w, "Method not allowed", http.StatusMethodNotAllowed, nil)
+	}
+}
+
+func (s *SQLiteStorage) postMessageHandler(w http.ResponseWriter, r *http.Request) {
+	var message *Message
+	if err := json.NewDecoder(r.Body).Decode(message); err != nil {
+		logHttpErr(w, "Failed to decode message", http.StatusBadRequest, err)
+		return
+	}
+	if err := s.insertMessage(message); err != nil {
+		logHttpErr(w, "Failed to insert message", http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
