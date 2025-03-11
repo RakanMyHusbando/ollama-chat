@@ -1,5 +1,6 @@
-const ollamaUrl = () => "http://217.160.124.151:11434";
-
+const ollamaUrl = () => "http://127.0.0.1:11434";
+const userId = () =>
+    parseInt(document.cookie.match(new RegExp(`(^| )user_id=([^;]+)`)).pop());
 const makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
 
 class Ollama {
@@ -12,13 +13,12 @@ class Ollama {
     /** @param {string} baseUrl */
     constructor(baseUrl) {
         this.baseUrl = baseUrl;
-        this.#getModel(this.#url("tags")).then(() => console.log(this.models));
     }
 
     /** @param {... string} apiPath */
     #url = (...apiPath) => `${this.baseUrl}/api/${apiPath.join("/")}`;
 
-    #getModel = async () => {
+    getModel = async () => {
         const res = await fetch(this.#url("tags"));
         const data = await res.json();
         data.models.forEach((model) => this.models.push(model.name));
@@ -34,7 +34,6 @@ class Ollama {
      */
     chatStream = async (model, messages) => {
         try {
-            console.log({ model, messages });
             const res = await fetch(this.#url("chat"), {
                 method: "POST",
                 body: JSON.stringify({ model, messages }),
@@ -85,20 +84,36 @@ class Api {
     #httpError = (status, statusText) =>
         new Error(`HTTP Error! Status: ${status}: ${statusText}`);
 
-    /** @param {Chat} chat */
-    postChat = async (chat) => {
+    /**
+     * @param {string} url
+     * @param {string} body
+     */
+    post = async (url, body) => {
+        console.log(url, body);
         try {
-            const res = await fetch("/api/chat", {
+            const res = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(chat.formJson()),
+                body: body,
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
-            return await res.json();
+            return;
         } catch (error) {
             console.error(error);
         }
     };
+
+    #jsonToMessage = (msg) =>
+        new Message(msg.chat_id, msg.role, msg.content, msg.created_at);
+
+    #jsonToChat = (chat) =>
+        new Chat(
+            chat.id,
+            chat.user_id,
+            chat.created_at,
+            chat.messages.map((msg) => this.#jsonToMessage(msg)),
+            chat.name,
+        );
 
     /**
      * @param {string|null} chatId
@@ -113,25 +128,7 @@ class Api {
             const res = await fetch(`/api/chat${query}`);
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
             const data = await res.json();
-            data.forEach((chat) =>
-                result.push(
-                    new Chat(
-                        chat.id,
-                        chat.user_id,
-                        chat.created_at,
-                        chat.messages.map(
-                            (msg) =>
-                                new Message(
-                                    msg.chat_id,
-                                    msg.content,
-                                    msg.role,
-                                    msg.created_at,
-                                ),
-                        ),
-                        chat.name,
-                    ),
-                ),
-            );
+            data.forEach((chat) => result.push(this.#jsonToChat(chat)));
             return result;
         } catch (error) {
             console.error(error);
@@ -149,80 +146,98 @@ class Api {
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
             return await res.json();
         } catch (error) {
-            console.log(error);
+            console.error(error);
         }
     };
 }
 
-class Chat {
-    /** @type {{name: string, userId: string, createdAt: string, messages: Message[] }} */
+class Chat extends Ollama {
+    /** @type {{id: string, name: string, userId: string, createdAt: string, messages: Message[] }} */
     content;
     /** @type {Api} */
     api;
 
     /**
+     * @param {string} ollamaUrl
      * @param {string} id
      * @param {string} userId
-     * @param {string} createdAt
-     * @param {Message[]} messages
+     * @param {Message[]} [messages]
+     * @param {string} [createdAt]
      * @param {string} [name="new chat"]
      */
-    constructor(id, userId, createdAt, messages, name = "new chat") {
-        this.content = { id, name, userId, createdAt, messages };
+    constructor(ollamaUrl, id, userId, messages, createdAt, name = "new chat") {
+        super(ollamaUrl);
+        this.content = {
+            id,
+            name,
+            userId,
+            createdAt: createdAt ? createdAt : new Date().toISOString(),
+            messages: messages ? messages : [],
+        };
         this.api = new Api();
     }
 
     updateName = async () => await this.api.updateChatName(this);
+    post = async () =>
+        await this.api.post("/api/chat", JSON.stringify(this.formJson()));
 
     /**
+     * @param {string} role - message role (user/assistant)
      * @param {string} content - message content
-     * @param {string} role - message role (user/assist)
-     * @param {string} createdAt - message creation time
+     * @param {string} [createdAt] - message creation time
      * @returns {Message} - The message object.
      */
-    addMessage = (content, role, createdAt) => {
-        const msg = new Message(this.content.id, content, role, createdAt);
+    addMessage = (role, content, createdAt = undefined) => {
+        const msg = new Message(this.content.id, role, content, createdAt);
         this.content.messages.push(msg);
         return msg;
     };
 
     /**
-     * @param {Message} message
-     * @param {Response} response
+     * @param  {Uint8Array<ArrayBufferLike> | undefined} value
+     * @returns {string}
      */
-    addResStreamMessage = async (message, response) => {
-        const badRes = ["", "<think>", "</think>"];
-        const reader = response.body.getReader();
-        try {
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                    this.content.messages.push(message);
-                    return;
-                }
-                new TextDecoder()
-                    .decode(value)
-                    .split("\n")
-                    .forEach((e) => {
-                        if (!badRes.includes(res.message.content)) {
-                            const res = JSON.parse(e);
-                            message.addText(res.message.content);
-                        }
-                    });
-            }
-        } catch (error) {
-            console.error(error);
-        }
+    #messageContent = (value) => {
+        let text = "";
+        if (value)
+            new TextDecoder()
+                .decode(value)
+                .split("\n")
+                .forEach((e) => {
+                    if (e == "") return;
+                    const res = JSON.parse(e).message.content;
+                    if (!["<think>", "</think>"].includes(res)) text = res;
+                });
+        return text;
+    };
+
+    /**
+     * @param {Message} message
+     * @param {string} model
+     */
+    addOllamaMessage = async (message, model) => {
+        const reader = await this.chatStream(
+            model,
+            this.formJson().messages,
+        ).then((res) => res.body.getReader());
+        let check = false;
+        do {
+            let { done, value } = await reader.read();
+            check = done;
+            if (done)
+                message.post().then(() => this.content.messages.push(message));
+            else message.addText(this.#messageContent(value));
+        } while (!check);
     };
 
     /** @returns {Object} The JSON representation of the chat object.*/
     formJson = () => {
-        const { id, name, user_id, created_at, messages } = this.content;
+        const { id, name, userId, createdAt, messages } = this.content;
         return {
             id,
             name,
-            user_id,
-            created_at,
+            user_id: userId,
+            created_at: createdAt,
             messages: messages.map((msg) => msg.formJson()),
         };
     };
@@ -249,14 +264,22 @@ class Message {
 
     /**
      * @param {string} chatId
-     * @param {string} content
      * @param {string} role
-     * @param {string} createdAt
+     * @param {string} [content]
+     * @param {string} [createdAt]
      */
-    constructor(chatId, content, role, createdAt) {
-        this.content = { chatId, content, role, createdAt };
+    constructor(chatId, role, content, createdAt) {
+        this.content = {
+            chatId,
+            content: content ? content : "",
+            role,
+            createdAt: createdAt ? createdAt : new Date().toISOString(),
+        };
         this.api = new Api();
     }
+
+    post = async () =>
+        await this.api.post("/api/message", JSON.stringify(this.formJson()));
 
     createHTML = () => {
         this.htmlElement = document.createElement("div");
@@ -265,6 +288,7 @@ class Message {
         msgTextElem.innerText = this.content.content;
         this.htmlElement.classList.add("message", this.content.role);
         this.htmlElement.appendChild(msgTextElem);
+        return this.htmlElement;
     };
 
     /** @param {string} text */
@@ -276,9 +300,9 @@ class Message {
 
     /** @returns {Object} The JSON representation of the message object.*/
     formJson = () => {
-        const { chat_id, content, role, created_at } = this.content;
-        return { chat_id, content, role, created_at };
+        const { chatId, content, role, createdAt } = this.content;
+        return { chat_id: chatId, content, role, created_at: createdAt };
     };
 }
 
-export { Ollama, Api, Chat, Message, makeId, ollamaUrl };
+export { Ollama, Api, Chat, Message, makeId, ollamaUrl, userId };

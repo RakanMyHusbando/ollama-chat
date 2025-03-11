@@ -8,56 +8,50 @@ const dropdownChats = document.querySelector(
 const messageInput = document.querySelector(".message-form input");
 const messageButton = document.querySelector(".message-form button");
 
-import { Ollama, Api, Chat, Message, makeId, ollamaUrl } from "./script.js";
+import { Api, Chat, Message, makeId, ollamaUrl, userId } from "./script.js";
 
-const newChat = (api, userId) => {
-    const c = new Chat(makeId(), userId, new Date().toISOString(), [], api);
-    localStorage.setItem("chat_id", c.content.id);
-    return c;
-};
-
-const userId = parseInt(
-    document.cookie.match(new RegExp(`(^| )user_id=([^;]+)`)).pop(),
-);
-
-const ollama = new Ollama(ollamaUrl());
+let chat = new Chat(ollamaUrl(), makeId(), userId());
 const api = new Api();
-/** @type {Chat} */
-let chat;
-
-if (!localStorage.getItem("chat_id")) chat = newChat(userId);
-else
-    await api.getChats(localStorage.getItem("chat_id"), true).then((chats) => {
-        chat = chats.length > 0 ? chats[0] : newChat(userId);
-    });
 
 const runMessage = async () => {
-    if (messageInput.value.length > 0) {
-        const msg = chat.addMessage(
-            messageInput.value,
-            "user",
-            new Date().toISOString(),
-        );
-        msg.createHTML();
-        chatHistory.appendChild(msg.htmlElement);
+    if (messageInput.value.length > 0 && dropdownModels.value != "") {
+        const msg = chat.addMessage("user", messageInput.value);
+        chat.content.messages.length > 1 ? msg.post() : chat.post();
+        chatHistory.appendChild(msg.createHTML());
         messageInput.value = "";
-        console.log(chat.formJson().messages);
-        const response = await ollama.chatStream(
-            ollama.models[0],
-            chat.formJson().messages,
-        );
-        const resMsg = new Message(
-            localStorage.getItem("chat_id"),
-            "",
-            "assistant",
-            new Date().toISOString(),
-        );
-        resMsg.createHTML();
-        chatHistory.appendChild(resMsg.htmlElement);
-        chat.addResStreamMessage(resMsg, response);
+        const assistantMsg = new Message(chat.content.id, "assistant");
+        chatHistory.appendChild(assistantMsg.createHTML());
+        chat.addOllamaMessage(assistantMsg, dropdownModels.value);
     }
 };
+
+chat.getModel().then(() =>
+    chat.models.forEach((model) => {
+        const option = document.createElement("option");
+        option.value = model;
+        option.text = model;
+        dropdownModels.appendChild(option);
+    }),
+);
+
+api.getChats().then((chats) => {
+    chats.forEach((chatId) => {
+        const option = document.createElement("option");
+        option.value = chatId;
+        option.text = chatId;
+        dropdownChats.appendChild(option);
+    });
+});
+
 messageButton.addEventListener("click", () => runMessage());
 messageInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runMessage();
+});
+
+dropdownChats.addEventListener("change", async () => {
+    chat = await api.getChats(dropdownChats.value, true);
+    chatHistory.innerHTML = "";
+    chat.content.messages.forEach((msg) =>
+        chatHistory.appendChild(msg.createHTML()),
+    );
 });

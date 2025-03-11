@@ -36,9 +36,9 @@ func (s *SQLiteStorage) insertUser(u *User) error {
 }
 
 func (s *SQLiteStorage) selectUserByName(n string) (*User, error) {
-	row := s.db.QueryRow("SELECT name, password, session_token FROM User WHERE name = ?", n)
+	row := s.db.QueryRow("SELECT id, name, password, session_token FROM User WHERE name = ?", n)
 	u := &User{}
-	err := row.Scan(&u.Name, &u.Password, &u.SessionToken)
+	err := row.Scan(&u.Id, &u.Name, &u.Password, &u.SessionToken)
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +46,9 @@ func (s *SQLiteStorage) selectUserByName(n string) (*User, error) {
 }
 
 func (s *SQLiteStorage) selectUserBySessionToken(st string) (*User, error) {
-	row := s.db.QueryRow("SELECT name, password, session_token FROM User WHERE session_token = ?", st)
+	row := s.db.QueryRow("SELECT id, name, password, session_token FROM User WHERE session_token = ?", st)
 	u := &User{}
-	err := row.Scan(&u.Name, &u.Password, &u.SessionToken)
+	err := row.Scan(&u.Id, &u.Name, &u.Password, &u.SessionToken)
 	if err != nil {
 		return nil, err
 	}

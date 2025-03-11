@@ -91,7 +91,15 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Name:     "session_token",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
+		Path:     "/",
 		HttpOnly: true,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "user_id",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		Path:     "/",
+		HttpOnly: false,
 	})
 	if err := s.updateUserSessionTokenByName("", s.user.Name); err != nil {
 		logHttpErr(w, "Failed to logout", http.StatusInternalServerError, err)
@@ -143,7 +151,7 @@ func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) {
 	var chat *Chat
-	if err := json.NewDecoder(r.Body).Decode(chat); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&chat); err != nil {
 		logHttpErr(w, "Failed to decode chat", http.StatusBadRequest, err)
 		return
 	}
@@ -165,7 +173,7 @@ func (s *SQLiteStorage) apiMessageHandler(w http.ResponseWriter, r *http.Request
 
 func (s *SQLiteStorage) postMessageHandler(w http.ResponseWriter, r *http.Request) {
 	var message *Message
-	if err := json.NewDecoder(r.Body).Decode(message); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&message); err != nil {
 		logHttpErr(w, "Failed to decode message", http.StatusBadRequest, err)
 		return
 	}
