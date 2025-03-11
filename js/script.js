@@ -136,13 +136,16 @@ class Api {
         }
     };
 
-    /** @param {Chat} chat */
-    updateChatName = async (chat) => {
+    /**
+     * @param {string} url
+     * @param {string} body
+     */
+    update = async (url, body) => {
         try {
-            const res = await fetch("/api/chat?change=name", {
+            const res = await fetch(url, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(chat.formJson()),
+                body,
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
             return await res.json();
@@ -176,7 +179,23 @@ class Chat extends Ollama {
         this.api = new Api();
     }
 
-    updateName = async () => await this.api.updateChatName(this);
+    updateName = async () => {
+        const task =
+            "Create a name for a chat.With maximum length of 3 words.Only respond with the name.";
+        let chat = "";
+        this.content.messages.forEach((msg) => {
+            chat += `\t${msg.content.role}: ${msg.content.content}\n`;
+        });
+        const res = await this.generate(
+            this.models[0],
+            `<task>\n\t${task}\n</task>\n<chat>\n${chat}</chat>`,
+        );
+        this.content.name = res.response;
+        await this.api.update(
+            "/api/chat",
+            JSON.stringify({ name: this.content.name, id: this.content.id }),
+        );
+    };
     post = async () =>
         await this.api.post("/api/chat", JSON.stringify(this.formJson()));
 
@@ -186,9 +205,12 @@ class Chat extends Ollama {
      * @param {string} [createdAt] - message creation time
      * @returns {Message} - The message object.
      */
-    addMessage = (role, content, createdAt = undefined) => {
+    addMessage = async (role, content, createdAt = undefined) => {
         const msg = new Message(this.content.id, role, content, createdAt);
         this.content.messages.push(msg);
+        const l = this.content.messages.length;
+        const lMod = l % 10;
+        if (l == 1 || lMod == 0 || lMod == 1) this.updateName();
         return msg;
     };
 
@@ -238,17 +260,6 @@ class Chat extends Ollama {
             created_at: createdAt,
             messages: messages.map((msg) => msg.formJson()),
         };
-    };
-
-    /** @returns {string} */
-    newNamePrompt = () => {
-        const task =
-            "Create a name for a chat.With maximum length of 3 words.Only respond with the name.";
-        let chat = "";
-        this.content.messages.forEach((msg) => {
-            chat += `\t${msg.content.role}: ${msg.content.content}\n`;
-        });
-        return `<task>\n\t${task}\n</task>\n<chat>\n${chat}</chat>`;
     };
 }
 

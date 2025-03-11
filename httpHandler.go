@@ -158,6 +158,18 @@ func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 }
 
+func (s *SQLiteStorage) putChatHandler(w http.ResponseWriter, r *http.Request) {
+	var chat *Chat
+	if err := json.NewDecoder(r.Body).Decode(&chat); err != nil {
+		logHttpErr(w, "Failed to decode chat", http.StatusBadRequest, err)
+		return
+	}
+	if err := s.updateChatNameById(chat); err != nil {
+		logHttpErr(w, "Failed to update chat", http.StatusInternalServerError, err)
+		return
+	}
+}
+
 func (s *SQLiteStorage) apiMessageHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:

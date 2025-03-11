@@ -1,9 +1,5 @@
 package main
 
-import (
-	"strings"
-)
-
 type Storage interface {
 	insertUser(u *User) error
 	selectUserByName(n string) (*User, error)
@@ -109,22 +105,13 @@ func (s *SQLiteStorage) selectChatsByUserID(userID int) ([]*Chat, error) {
 	return chats, nil
 }
 
-func (s *SQLiteStorage) updateChatById(c *Chat) error {
-	query := "UPDATE Chat SET"
-	if c.Name != "" {
-		query += " name = ?,"
-	}
-	if c.CreatedAt != "" {
-		query += " created_at = ?,"
-	}
-	query = strings.TrimSuffix(query, ",")
-	query += " WHERE id = ?"
-	prep, err := s.db.Prepare(query)
+func (s *SQLiteStorage) updateChatNameById(c *Chat) error {
+	prep, err := s.db.Prepare("UPDATE Chat SET name = ? WHERE id = ?")
 	if err != nil {
 		return err
 	}
 	defer prep.Close()
-	if _, err := prep.Exec(c.Name, c.CreatedAt, c.Id); err != nil {
+	if _, err := prep.Exec(c.Name, c.Id); err != nil {
 		return err
 	}
 	return nil
