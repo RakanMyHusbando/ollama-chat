@@ -26,8 +26,8 @@ func main() {
 	host = os.Getenv("HOST")
 	port = os.Getenv("PORT")
 	ollamaUrl = os.Getenv("OLLAMA_URL")
-	if port == "" {
-		log.Fatal("PORT must be set in .env file")
+	if port == "" || ollamaUrl == "" {
+		log.Fatal("PORT and OLLAMA_URL must be set in .env file")
 	}
 
 	s, err := newSQLiteStorage()

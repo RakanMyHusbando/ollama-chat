@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -29,6 +28,12 @@ func (s *SQLiteStorage) routes() {
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "ollama",
+		Value:    ollamaUrl,
+		Path:     "/",
+		HttpOnly: false,
+	})
 	if user, err := s.getUserBySessionToken(r); err != nil || user == nil {
 		loadLoginPage(w, "")
 		return
@@ -76,13 +81,6 @@ func (s *SQLiteStorage) loginHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "user_id",
-		Value:    strconv.Itoa(user.Id),
-		Expires:  time.Now().Add(24 * time.Hour),
-		Path:     "/",
-		HttpOnly: false,
-	})
 	http.Redirect(w, r, "/chat", http.StatusFound)
 }
 
@@ -93,13 +91,6 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(-time.Hour),
 		Path:     "/",
 		HttpOnly: true,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     "user_id",
-		Value:    "",
-		Expires:  time.Now().Add(-time.Hour),
-		Path:     "/",
-		HttpOnly: false,
 	})
 	if err := s.updateUserSessionTokenByName("", s.user.Name); err != nil {
 		logHttpErr(w, "Failed to logout", http.StatusInternalServerError, err)
@@ -126,7 +117,7 @@ func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
 	qChatId := r.URL.Query().Get("id")
 	chats := []*Chat{}
 	if qChatId != "" {
-		if chat, err := s.selectChatById(qChatId); err == nil {
+		if chat, _ := s.selectChatById(qChatId); chat != nil {
 			chats = append(chats, chat)
 		}
 	}
@@ -139,14 +130,18 @@ func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-	}
-	b, err := json.Marshal(chats)
-	if err != nil {
-		logHttpErr(w, "Failed to marshal chats", http.StatusInternalServerError, err)
-		return
+	} else {
+		chats, err = s.selectChatsByUserID(s.user.Id)
+		if err != nil {
+			logHttpErr(w, "Failed to get chats", http.StatusInternalServerError, err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(b)
+	if err := json.NewEncoder(w).Encode(chats); err != nil {
+		logHttpErr(w, "Failed to encode chats", http.StatusInternalServerError, err)
+		return
+	}
 }
 
 func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +150,7 @@ func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) 
 		logHttpErr(w, "Failed to decode chat", http.StatusBadRequest, err)
 		return
 	}
+	chat.UserId = s.user.Id
 	if err := s.insertChat(chat); err != nil {
 		logHttpErr(w, "Failed to insert chat", http.StatusInternalServerError, err)
 		return

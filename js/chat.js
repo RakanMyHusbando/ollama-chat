@@ -8,9 +8,9 @@ const dropdownChats = document.querySelector(
 const messageInput = document.querySelector(".message-form input");
 const messageButton = document.querySelector(".message-form button");
 
-import { Api, Chat, Message, makeId, ollamaUrl, userId } from "./script.js";
+import { Api, Chat, Message, makeId, ollamaUrl } from "./script.js";
 
-let chat = new Chat(ollamaUrl(), makeId(), userId());
+let chat = new Chat(ollamaUrl(), makeId());
 const api = new Api();
 
 const runMessage = async () => {
@@ -35,10 +35,11 @@ chat.getModel().then(() =>
 );
 
 api.getChats().then((chats) => {
-    chats.forEach((chatId) => {
+    console.log(chats);
+    chats.forEach((chat) => {
         const option = document.createElement("option");
-        option.value = chatId;
-        option.text = chatId;
+        option.value = chat.content.id;
+        option.text = chat.content.name;
         dropdownChats.appendChild(option);
     });
 });

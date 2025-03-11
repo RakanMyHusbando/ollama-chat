@@ -1,6 +1,5 @@
-const ollamaUrl = () => "http://127.0.0.1:11434";
-const userId = () =>
-    parseInt(document.cookie.match(new RegExp(`(^| )user_id=([^;]+)`)).pop());
+const ollamaUrl = () =>
+    document.cookie.match(new RegExp(`(^| )ollama=([^;]+)`)).pop();
 const makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
 
 class Ollama {
@@ -111,7 +110,9 @@ class Api {
             chat.id,
             chat.user_id,
             chat.created_at,
-            chat.messages.map((msg) => this.#jsonToMessage(msg)),
+            chat.message
+                ? chat.messages.map((msg) => this.#jsonToMessage(msg))
+                : undefined,
             chat.name,
         );
 
@@ -152,7 +153,7 @@ class Api {
 }
 
 class Chat extends Ollama {
-    /** @type {{id: string, name: string, userId: string, createdAt: string, messages: Message[] }} */
+    /** @type {{id: string, name: string, createdAt: string, messages: Message[] }} */
     content;
     /** @type {Api} */
     api;
@@ -160,17 +161,15 @@ class Chat extends Ollama {
     /**
      * @param {string} ollamaUrl
      * @param {string} id
-     * @param {string} userId
      * @param {Message[]} [messages]
      * @param {string} [createdAt]
      * @param {string} [name="new chat"]
      */
-    constructor(ollamaUrl, id, userId, messages, createdAt, name = "new chat") {
+    constructor(ollamaUrl, id, messages, createdAt, name = "new chat") {
         super(ollamaUrl);
         this.content = {
             id,
             name,
-            userId,
             createdAt: createdAt ? createdAt : new Date().toISOString(),
             messages: messages ? messages : [],
         };
@@ -232,11 +231,10 @@ class Chat extends Ollama {
 
     /** @returns {Object} The JSON representation of the chat object.*/
     formJson = () => {
-        const { id, name, userId, createdAt, messages } = this.content;
+        const { id, name, createdAt, messages } = this.content;
         return {
             id,
             name,
-            user_id: userId,
             created_at: createdAt,
             messages: messages.map((msg) => msg.formJson()),
         };
@@ -305,4 +303,4 @@ class Message {
     };
 }
 
-export { Ollama, Api, Chat, Message, makeId, ollamaUrl, userId };
+export { Ollama, Api, Chat, Message, makeId, ollamaUrl };
