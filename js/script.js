@@ -1,4 +1,4 @@
-const ollamaUrl = () => "http://192.168.178.97:11434";
+const ollamaUrl = () => "http://217.160.124.151:11434";
 
 const makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
 
@@ -34,6 +34,7 @@ class Ollama {
      */
     chatStream = async (model, messages) => {
         try {
+            console.log({ model, messages });
             const res = await fetch(this.#url("chat"), {
                 method: "POST",
                 body: JSON.stringify({ model, messages }),
@@ -199,10 +200,15 @@ class Chat {
                     this.content.messages.push(message);
                     return;
                 }
-                const str = new TextDecoder().decode(value);
-                const res = JSON.parse(str);
-                if (!badRes.includes(res.message.content))
-                    message.addText(res.message.content);
+                new TextDecoder()
+                    .decode(value)
+                    .split("\n")
+                    .forEach((e) => {
+                        if (!badRes.includes(res.message.content)) {
+                            const res = JSON.parse(e);
+                            message.addText(res.message.content);
+                        }
+                    });
             }
         } catch (error) {
             console.error(error);

@@ -5,43 +5,27 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
+func serveFile(file string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, file)
+	}
+}
+
 func (s *SQLiteStorage) routes() {
-	http.HandleFunc("/", s.indexHandler)
-	http.HandleFunc("/chat", s.chatHandler)
+	http.HandleFunc("/", s.makeHandler(s.indexHandler, false))
+	http.HandleFunc("/chat", s.makeHandler(serveFile("./html/chat.html"), true))
 
-	http.HandleFunc("/register", s.registerHandler)
-	http.HandleFunc("/login", s.loginHandler)
-	http.HandleFunc("/logout", s.authorize(s.logoutHandler))
+	http.HandleFunc("/register", s.makeHandler(s.registerHandler, false))
+	http.HandleFunc("/login", s.makeHandler(s.loginHandler, false))
+	http.HandleFunc("/logout", s.makeHandler(s.logoutHandler, true))
 
-	http.HandleFunc("/ollama/", ollamaHandler)
-
-	http.HandleFunc("/api/chat", s.authorize(s.apiChatHandler))
-	http.HandleFunc("/api/message", s.authorize(s.apiMessageHandler))
+	http.HandleFunc("/api/chat", s.makeHandler(s.apiChatHandler, true))
+	http.HandleFunc("/api/message", s.makeHandler(s.apiMessageHandler, true))
 
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
-}
-
-func ollamaHandler(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = strings.Replace(r.URL.Path, "/ollama/", "/api/", 1)
-	proxy.ServeHTTP(w, r)
-}
-
-func ollamaStreamHandler(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = strings.Replace(r.URL.Path, "/ollama/stream/", "/api/", 1)
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Del("Content-Length")
-		resp.Header.Del("Content-Encoding")
-		return nil
-	}
-	flusher := w.(http.Flusher)
-	w.Header().Set("Transfer-Encoding", "chunked")
-	proxy.ServeHTTP(w, r)
-	flusher.Flush()
-
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -114,14 +98,6 @@ func (s *SQLiteStorage) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
-}
-
-func (s *SQLiteStorage) chatHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("Access-Control-Allow-Credentials", "true")
-	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-	http.ServeFile(w, r, "html/chat.html")
 }
 
 /* --------------------------------- API --------------------------------- */

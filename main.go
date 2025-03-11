@@ -7,8 +7,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -20,8 +18,6 @@ var (
 	host      string
 	port      string
 	ollamaUrl string
-	proxy     *httputil.ReverseProxy
-	targetUrl *url.URL
 	client    = &http.Client{}
 )
 
@@ -30,16 +26,9 @@ func main() {
 	host = os.Getenv("HOST")
 	port = os.Getenv("PORT")
 	ollamaUrl = os.Getenv("OLLAMA_URL")
-	if port == "" || ollamaUrl == "" {
-		log.Fatal("PORT and OLLAMA_URL must be set in .env file")
+	if port == "" {
+		log.Fatal("PORT must be set in .env file")
 	}
-
-	var err error
-	targetUrl, err = url.Parse(ollamaUrl)
-	if err != nil {
-		log.Fatal("Failed to parse ollama-url.")
-	}
-	proxy = httputil.NewSingleHostReverseProxy(targetUrl)
 
 	s, err := newSQLiteStorage()
 	if err != nil {
@@ -64,18 +53,20 @@ func logHttpErr(w http.ResponseWriter, msg string, code int, err error) {
 	http.Error(w, msg, code)
 }
 
-type httpFunc func(w http.ResponseWriter, r *http.Request)
-
-func (s *SQLiteStorage) authorize(f httpFunc) http.HandlerFunc {
+func (s *SQLiteStorage) makeHandler(f http.HandlerFunc, authorize bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := s.getUserBySessionToken(r)
-		if err != nil || user == nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+		if authorize {
+			user, err := s.getUserBySessionToken(r)
+			if err != nil || user == nil {
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+			s.user = user
+			f(w, r)
+			s.user = nil
 			return
 		}
-		s.user = user
 		f(w, r)
-		s.user = nil
 	}
 }
 
@@ -105,10 +96,6 @@ func (s *SQLiteStorage) getUserBySessionToken(r *http.Request) (*User, error) {
 }
 
 func loadLoginPage(w http.ResponseWriter, errMsg string) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("Access-Control-Allow-Credentials", "true")
-	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	tmpl, err := template.ParseFiles("html/login.html")
 	if err != nil {
 		http.Error(w, "Failed to load this page", http.StatusInternalServerError)
