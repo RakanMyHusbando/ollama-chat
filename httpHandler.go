@@ -16,7 +16,9 @@ func serveFile(file string) http.HandlerFunc {
 
 func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/", s.makeHandler(s.indexHandler, false))
+
 	http.HandleFunc("/chat", s.makeHandler(serveFile("./html/chat.html"), true))
+	http.HandleFunc("/new-model", s.makeHandler(serveFile("./html/new-model.html"), true))
 
 	http.HandleFunc("/register", s.makeHandler(s.registerHandler, false))
 	http.HandleFunc("/login", s.makeHandler(s.loginHandler, false))
@@ -26,15 +28,10 @@ func (s *SQLiteStorage) routes() {
 	http.HandleFunc("/api/message", s.makeHandler(s.apiMessageHandler, true))
 
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
+	http.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir("./css/"))))
 }
 
 func (s *SQLiteStorage) indexHandler(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "ollama",
-		Value:    ollamaUrl,
-		Path:     "/",
-		HttpOnly: false,
-	})
 	if user, err := s.getUserBySessionToken(r); err != nil || user == nil {
 		loadLoginPage(w, "")
 		return

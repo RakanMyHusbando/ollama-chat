@@ -1,0 +1,25 @@
+header {
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    height: fit-content;
+    gap: 8px;
+    background-color: #2c323d;
+    padding: 8px;
+    margin: 0;
+}
+
+.headline-elem {
+    font-size: 1rem;
+    border: none;
+    background-color: #545a68;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 100%;
+    text-align: center;
+}

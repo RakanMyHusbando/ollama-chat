@@ -195,14 +195,11 @@ class Chat extends Ollama {
      * @param {string} role - message role (user/assistant)
      * @param {string} content - message content
      * @param {string} [createdAt] - message creation time
-     * @returns {Promise<Message>} - The message object.
+     * @returns {Message} - The message object.
      */
-    addMessage = async (role, content, createdAt = undefined) => {
+    addMessage = (role, content, createdAt = undefined) => {
         const msg = new Message(this.content.id, role, content, createdAt);
         this.content.messages.push(msg);
-        const l = this.content.messages.length;
-        const lMod = l % 10;
-        if (l == 1 || lMod == 0 || lMod == 1) this.updateName();
         return msg;
     };
 
@@ -229,6 +226,7 @@ class Chat extends Ollama {
      * @param {string} model
      */
     addOllamaMessage = async (message, model) => {
+        console.log(this.formJson().messages);
         const reader = await this.chatStream(
             model,
             this.formJson().messages,
@@ -309,4 +307,4 @@ class Message {
     };
 }
 
-export { Api, Chat, Message };
+export { Api, Chat, Message, Ollama };

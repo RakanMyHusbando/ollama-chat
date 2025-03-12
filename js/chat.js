@@ -5,8 +5,8 @@ const dropdownModels = document.querySelector(
 const dropdownChats = document.querySelector(
     ".headline-elem.dropdown.dropdown-chats",
 );
-const messageInput = document.querySelector(".message-form input");
-const messageButton = document.querySelector(".message-form button");
+const messageInput = document.querySelector(".message.form input");
+const messageButton = document.querySelector(".message.form button");
 
 import { Api, Chat, Message } from "./script.js";
 
@@ -15,7 +15,9 @@ const api = new Api();
 
 const runMessage = async () => {
     if (messageInput.value.length > 0 && dropdownModels.value != "") {
-        const msg = await chat.addMessage("user", messageInput.value);
+        const msg = chat.addMessage("user", messageInput.value);
+        if ([0, 1].includes(chat.content.messages.length % 10))
+            chat.updateName();
         chatHistory.appendChild(msg.createHTML());
         chat.content.messages.length > 1 ? msg.post() : chat.post();
         messageInput.value = "";
@@ -49,11 +51,14 @@ messageInput.addEventListener("keydown", (e) => {
 });
 
 dropdownChats.addEventListener("change", async () => {
-    api.getChats(dropdownChats.value, true).then((res) => {
-        chat = res[0];
-        chatHistory.innerHTML = "";
-        chat.content.messages.forEach((msg) =>
-            chatHistory.appendChild(msg.createHTML()),
-        );
-    });
+    chatHistory.innerHTML = "";
+    if (dropdownChats.value == "") chat = new Chat();
+    else
+        api.getChats(dropdownChats.value, true).then((res) => {
+            chat = res[0];
+            chat.content.messages.forEach((msg) =>
+                chatHistory.appendChild(msg.createHTML()),
+            );
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        });
 });

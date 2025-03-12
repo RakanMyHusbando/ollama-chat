@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <script src="/js/new-model.js" type="module" defer></script>
+        <link rel="stylesheet" href="/css/style.css" />
+        <link rel="stylesheet" href="/css/normalize.css" />
+        <link rel="stylesheet" href="/css/header.css" />
+        <title>New model</title>
+        <style>
+            .model.form {
+                grid-column: 2/5;
+            }
+            .model.form input {
+                width: 100%;
+            }
+        </style>
+    </head>
+    <header>
+        <a href="/chat" class="headline-elem">chat</a>
+        <div class="model form">
+            <input type="text" name="model" placeholder="Enter a model-name" />
+            <button type="submit">Pull</button>
+        </div>
+    </header>
+    <main></main>
+</html>

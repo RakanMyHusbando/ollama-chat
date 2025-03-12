@@ -34,6 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	s.routes()
 
 	serverAddr := fmt.Sprintf("http://%s:%s", host, port)
@@ -55,6 +56,12 @@ func logHttpErr(w http.ResponseWriter, msg string, code int, err error) {
 
 func (s *SQLiteStorage) makeHandler(f http.HandlerFunc, authorize bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "ollama",
+			Value:    ollamaUrl,
+			Path:     "/",
+			HttpOnly: false,
+		})
 		if authorize {
 			user, err := s.getUserBySessionToken(r)
 			if err != nil || user == nil {
