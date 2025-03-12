@@ -169,11 +169,11 @@ func (s *SQLiteStorage) selectMessagesByChatID(chatID string) ([]*Message, error
 	defer rows.Close()
 	var messages []*Message
 	for rows.Next() {
-		var m Message
+		m := new(Message)
 		if err := rows.Scan(&m.Id, &m.ChatId, &m.Content, &m.Role, &m.CreatedAt); err != nil {
 			return nil, err
 		}
-		messages = append(messages, &m)
+		messages = append(messages, m)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

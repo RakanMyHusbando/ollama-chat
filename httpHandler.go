@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -107,34 +108,39 @@ func (s *SQLiteStorage) apiChatHandler(w http.ResponseWriter, r *http.Request) {
 		s.getChatHandler(w, r)
 	case http.MethodPost:
 		s.postChatHandler(w, r)
+	case http.MethodPut:
+		s.putChatHandler(w, r)
 	default:
-		logHttpErr(w, "Method not allowed", http.StatusMethodNotAllowed, nil)
+		logHttpErr(w, "Method not allowed /api/chat", http.StatusMethodNotAllowed, nil)
 	}
 }
 
 func (s *SQLiteStorage) getChatHandler(w http.ResponseWriter, r *http.Request) {
 	qMsg := r.URL.Query().Get("msg")
 	qChatId := r.URL.Query().Get("id")
+	var err error
 	chats := []*Chat{}
 	if qChatId != "" {
 		if chat, _ := s.selectChatById(qChatId); chat != nil {
 			chats = append(chats, chat)
-		}
-	}
-	var err error
-	if qMsg == "true" {
-		for _, chat := range chats {
-			chat.Messages, err = s.selectMessagesByChatID(chat.Id)
-			if err != nil {
-				logHttpErr(w, "Failed to get messages", http.StatusInternalServerError, err)
-				return
-			}
 		}
 	} else {
 		chats, err = s.selectChatsByUserID(s.user.Id)
 		if err != nil {
 			logHttpErr(w, "Failed to get chats", http.StatusInternalServerError, err)
 			return
+		}
+	}
+	if qMsg == "true" {
+		for _, chat := range chats {
+			msgs, err := s.selectMessagesByChatID(chat.Id)
+			if err != nil {
+				logHttpErr(w, "Failed to get messages", http.StatusInternalServerError, err)
+				return
+			}
+			if msgs != nil {
+				chat.Messages = msgs
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -154,6 +160,11 @@ func (s *SQLiteStorage) postChatHandler(w http.ResponseWriter, r *http.Request) 
 	if err := s.insertChat(chat); err != nil {
 		logHttpErr(w, "Failed to insert chat", http.StatusInternalServerError, err)
 		return
+	}
+	for _, message := range chat.Messages {
+		if err := s.insertMessage(message); err != nil {
+			log.Printf("Failed to insert message (id: %v, chat_id: %v): %s", message.Id, message.ChatId, err.Error())
+		}
 	}
 	w.WriteHeader(http.StatusCreated)
 }
@@ -175,7 +186,7 @@ func (s *SQLiteStorage) apiMessageHandler(w http.ResponseWriter, r *http.Request
 	case http.MethodPost:
 		s.postMessageHandler(w, r)
 	default:
-		logHttpErr(w, "Method not allowed", http.StatusMethodNotAllowed, nil)
+		logHttpErr(w, "Method not allowed for /api/message", http.StatusMethodNotAllowed, nil)
 	}
 }
 

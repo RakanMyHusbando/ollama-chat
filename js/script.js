@@ -1,18 +1,9 @@
-const ollamaUrl = () =>
-    document.cookie.match(new RegExp(`(^| )ollama=([^;]+)`)).pop();
-const makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
-
 class Ollama {
     /** @type {string} */
-    baseUrl;
+    baseUrl = document.cookie.match(new RegExp(`(^| )ollama=([^;]+)`)).pop();
 
     /** @type {string[]} */
     models = [];
-
-    /** @param {string} baseUrl */
-    constructor(baseUrl) {
-        this.baseUrl = baseUrl;
-    }
 
     /** @param {... string} apiPath */
     #url = (...apiPath) => `${this.baseUrl}/api/${apiPath.join("/")}`;
@@ -88,7 +79,6 @@ class Api {
      * @param {string} body
      */
     post = async (url, body) => {
-        console.log(url, body);
         try {
             const res = await fetch(url, {
                 method: "POST",
@@ -105,16 +95,16 @@ class Api {
     #jsonToMessage = (msg) =>
         new Message(msg.chat_id, msg.role, msg.content, msg.created_at);
 
-    #jsonToChat = (chat) =>
-        new Chat(
+    #jsonToChat = (chat) => {
+        return new Chat(
             chat.id,
-            chat.user_id,
-            chat.created_at,
-            chat.message
+            chat.messages
                 ? chat.messages.map((msg) => this.#jsonToMessage(msg))
-                : undefined,
+                : [],
+            chat.created_at,
             chat.name,
         );
+    };
 
     /**
      * @param {string|null} chatId
@@ -148,7 +138,7 @@ class Api {
                 body,
             });
             if (!res.ok) throw this.#httpError(res.status, res.statusText);
-            return await res.json();
+            return;
         } catch (error) {
             console.error(error);
         }
@@ -162,26 +152,27 @@ class Chat extends Ollama {
     api;
 
     /**
-     * @param {string} ollamaUrl
-     * @param {string} id
+     * @param {string} [id]
      * @param {Message[]} [messages]
      * @param {string} [createdAt]
-     * @param {string} [name="new chat"]
+     * @param {string} [name]
      */
-    constructor(ollamaUrl, id, messages, createdAt, name = "new chat") {
-        super(ollamaUrl);
+    constructor(id, messages, createdAt, name) {
+        super();
         this.content = {
-            id,
-            name,
+            id: id ? id : this.#makeId(),
+            name: name ? name : "-",
             createdAt: createdAt ? createdAt : new Date().toISOString(),
             messages: messages ? messages : [],
         };
         this.api = new Api();
     }
 
+    #makeId = () => Math.floor(Math.random() * Date.now()).toString(36);
+
     updateName = async () => {
         const task =
-            "Create a name for a chat.With maximum length of 3 words.Only respond with the name.";
+            "Create a name for follwoing chat with maximum length of 3 words. Only respond with the name.";
         let chat = "";
         this.content.messages.forEach((msg) => {
             chat += `\t${msg.content.role}: ${msg.content.content}\n`;
@@ -190,20 +181,21 @@ class Chat extends Ollama {
             this.models[0],
             `<task>\n\t${task}\n</task>\n<chat>\n${chat}</chat>`,
         );
-        this.content.name = res.response;
+        this.content.name = await res.response;
         await this.api.update(
             "/api/chat",
             JSON.stringify({ name: this.content.name, id: this.content.id }),
         );
     };
+
     post = async () =>
-        await this.api.post("/api/chat", JSON.stringify(this.formJson()));
+        this.api.post("/api/chat", JSON.stringify(this.formJson()));
 
     /**
      * @param {string} role - message role (user/assistant)
      * @param {string} content - message content
      * @param {string} [createdAt] - message creation time
-     * @returns {Message} - The message object.
+     * @returns {Promise<Message>} - The message object.
      */
     addMessage = async (role, content, createdAt = undefined) => {
         const msg = new Message(this.content.id, role, content, createdAt);
@@ -253,12 +245,11 @@ class Chat extends Ollama {
 
     /** @returns {Object} The JSON representation of the chat object.*/
     formJson = () => {
-        const { id, name, createdAt, messages } = this.content;
         return {
-            id,
-            name,
-            created_at: createdAt,
-            messages: messages.map((msg) => msg.formJson()),
+            id: this.content.id,
+            name: this.content.name,
+            created_at: this.content.createdAt,
+            messages: this.content.messages.map((msg) => msg.formJson()),
         };
     };
 }
@@ -309,9 +300,13 @@ class Message {
 
     /** @returns {Object} The JSON representation of the message object.*/
     formJson = () => {
-        const { chatId, content, role, createdAt } = this.content;
-        return { chat_id: chatId, content, role, created_at: createdAt };
+        return {
+            chat_id: this.content.chatId,
+            content: this.content.content,
+            role: this.content.role,
+            created_at: this.content.createdAt,
+        };
     };
 }
 
-export { Ollama, Api, Chat, Message, makeId, ollamaUrl };
+export { Api, Chat, Message };
