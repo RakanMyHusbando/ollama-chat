@@ -3,6 +3,31 @@ const modelButton = document.querySelector(".model.form button");
 import { Ollama } from "./script.js";
 const ollama = new Ollama();
 
+const createHTML = (text) => {
+    const msgElem = document.createElement("div");
+    msgElem.classList.add("message", "pull-model");
+    const msgTextElem = document.createElement("div");
+    msgTextElem.classList.add("text");
+    msgTextElem.textContent = text;
+    msgElem.appendChild(msgTextElem);
+    return msgElem;
+};
+
+/**
+ * @param {any} res
+ * @returns {string}
+ */
+const formRespMsg = (res) => {
+    const completed =
+        res.completed && parseInt(res.completed) ? parseInt(res.completed) : 0;
+    const total = res.total && parseInt(res.total) ? parseInt(res.total) : 1;
+    const status = res.status ? res.status : "unknown";
+    const pr = status.includes("pulling")
+        ? ` \t${Math.round((100 * completed) / total)}%`
+        : "";
+    return `${status}${pr}`;
+};
+
 const pullModel = async () => {
     const reader = await ollama
         .pullStream(modelInput.value)
@@ -14,10 +39,15 @@ const pullModel = async () => {
 
         const str = new TextDecoder().decode(value);
         try {
-            const res = JSON.parse(str);
-            const p = document.createElement("p");
-            p.textContent = `status: ${res.status ? res.status : "-"} [${res.completed ? res.completed : "-"}/${res.total ? res.total : "-"}]`;
-            document.querySelector("main").appendChild(p);
+            /** @type {HTMLDivElement|null} */
+            const main = document.querySelector("main");
+            str.split("}\n").forEach((elem) => {
+                if (elem != "") {
+                    const res = JSON.parse(elem + "}");
+                    if (res.status.includes("pulling")) main.innerHTML = "";
+                    main.appendChild(createHTML(formRespMsg(res)));
+                }
+            });
         } catch (err) {
             console.log(err);
         }
