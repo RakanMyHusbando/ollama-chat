@@ -19,9 +19,6 @@ a {
     padding: 4px 8px;
     border-radius: 4px;
 }
-.message {
-    width: 100%;
-}
 .message .text {
     background-color: #545a68;
     color: white;

@@ -175,17 +175,33 @@ class Chat extends Ollama {
             "Create a name for follwoing chat with maximum length of 3 words. Only respond with the name.";
         let chat = "";
         this.content.messages.forEach((msg) => {
-            chat += `\t${msg.content.role}: ${msg.content.content}\n`;
+            chat += `\t${msg.content.role}: ${
+                msg.content.role == "assistant" &&
+                msg.content.content.includes("[/think]")
+                    ? msg.content.content.split("[/think]")[1]
+                    : msg.content.content
+            }\n`;
         });
-        const res = await this.generate(
+        await this.generate(
             this.models[0],
             `<task>\n\t${task}\n</task>\n<chat>\n${chat}</chat>`,
-        );
-        this.content.name = await res.response;
-        await this.api.update(
-            "/api/chat",
-            JSON.stringify({ name: this.content.name, id: this.content.id }),
-        );
+        )
+            .then((res) => {
+                console.log(res);
+                this.content.name = res.response.includes("</think>")
+                    ? res.response.split("</think>")[1]
+                    : res;
+            })
+            .then(
+                async () =>
+                    await this.api.update(
+                        "/api/chat",
+                        JSON.stringify({
+                            name: this.content.name,
+                            id: this.content.id,
+                        }),
+                    ),
+            );
     };
 
     post = async () =>
@@ -212,11 +228,9 @@ class Chat extends Ollama {
         if (value)
             new TextDecoder()
                 .decode(value)
-                .split("\n")
+                .split("}\n")
                 .forEach((e) => {
-                    if (e == "") return;
-                    const res = JSON.parse(e).message.content;
-                    if (!["<think>", "</think>"].includes(res)) text = res;
+                    if (e != "") text += JSON.parse(e + "}").message.content;
                 });
         return text;
     };
@@ -236,8 +250,11 @@ class Chat extends Ollama {
             let { done, value } = await reader.read();
             check = done;
             if (done)
-                message.post().then(() => this.content.messages.push(message));
-            else message.addText(this.#messageContent(value));
+                return message
+                    .post()
+                    .then(() => this.content.messages.push(message));
+            const text = this.#messageContent(value);
+            message.addText(text);
         } while (!check);
     };
 
@@ -291,9 +308,12 @@ class Message {
 
     /** @param {string} text */
     addText = (text) => {
-        this.content.content += text;
+        let t = text
+            .replace("<think>", "[think]")
+            .replace("</think>", "[/think]");
+        this.content.content += t;
         if (this.htmlElement)
-            this.htmlElement.firstElementChild.textContent += text;
+            this.htmlElement.firstElementChild.textContent += t;
     };
 
     /** @returns {Object} The JSON representation of the message object.*/
