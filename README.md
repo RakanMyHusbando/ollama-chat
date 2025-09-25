@@ -36,7 +36,7 @@ A simple chat application using Ollama for local LLM inference.
    ```bash
    cp .env.example .env
    ```
-   HOST default is `localhost`  
+   `HOST` default is `localhost`  
 
 7. **Start the application**
 
