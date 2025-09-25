@@ -31,16 +31,22 @@ A simple chat application using Ollama for local LLM inference.
    ```bash
    go mod tidy
    ```
+   
+5. **Set enviroment variables**
+   ```bash
+   cp .env.example .env
+   ```
+   HOST default is `localhost`  
 
-5. **Start the application**
+7. **Start the application**
 
    ```bash
    go run .
    ```
 
-6. **Begin chatting!**
+8. **Begin chatting!**
 
-   Open your browser and go to the provided local URL (e.g. `localhost:3000`) to start a conversation with your local LLM.
+   Open your browser and go to the URL (set in .env) to start a conversation with your local LLM.
 
 ## Documentation
 
