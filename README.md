@@ -56,4 +56,4 @@ A simple chat application using Ollama for local LLM inference.
 
 ## License
 
-See `LICENSE` for details.
+See [`LICENSE`](/LICENSE) for details.
